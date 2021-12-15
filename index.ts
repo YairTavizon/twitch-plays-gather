@@ -1,8 +1,11 @@
 import { API_KEY } from "./api-key";
 import { Game, MoveDirection } from "@gathertown/gather-game-client";
+import fs from 'fs';
+import util from 'util'
+
 global.WebSocket = require("isomorphic-ws");
 
-const SPACE_ID = "oxrhEtb3sV7VutbQ\\GatherOffice";
+const SPACE_ID = "xSfl6Admq5wHVIgS\\my-space";
 
 // setup
 
@@ -19,6 +22,40 @@ game.subscribeToEvent("playerChats", (data, _context) => {
 	if (message.messageType === "DM") {
 		// do something
 		switch (message.contents.toLowerCase()) {
+			case "hello":
+				let initialized = false;
+
+				game.subscribeToEvent("playerMoves", (data, context) => {
+					if(!initialized && context.playerId === message.senderId) {
+						if(data.playerMoves.x && data.playerMoves.y) {
+							//@ts-ignore
+							console.log('teleporting')
+							game.teleport('empty-room-medium-brick', data.playerMoves.x + 1, data.playerMoves.y + 1 )
+						}
+					} else {
+						switch (data.playerMoves.direction) {
+							case 1: 
+								game.move(MoveDirection.Down);
+								break;
+							case 3:
+								game.move(MoveDirection.Up);
+								break;
+							case 5:
+								game.move(MoveDirection.Left);
+								break;
+							case 7:
+								game.move(MoveDirection.Right);
+								break;
+							default:
+								// @ts-ignore
+								game.teleport('empty-room-medium-brick', data.playerMoves.x + 1, data.playerMoves.y + 1 );
+								break;
+						}
+					}
+
+					initialized = true;
+				})
+				break;
 			case "up":
 				game.move(MoveDirection.Up);
 				break;
@@ -47,18 +84,23 @@ game.subscribeToEvent("playerChats", (data, _context) => {
 // name and status setup
 setTimeout(() => {
 	console.log("setting name and status");
-	game.engine.sendAction({
-		$case: "setName",
-		setName: {
-			name: "Twitchy",
-		},
-	});
-	game.engine.sendAction({
-		$case: "setTextStatus",
-		setTextStatus: {
-			textStatus: "DM me to move!",
-		},
-	});
+	console.log(game.partialMaps);
+
+	fs.writeFileSync('test3.json', util.inspect(game.partialMaps, { showHidden: true, depth: null }));
+
+	
+	//game.engine.sendAction({
+	//	$case: "setName",
+	//	setName: {
+	//		name: "Twitchy",
+	//	},
+	//});
+	//game.engine.sendAction({
+	//	$case: "setTextStatus",
+	//	setTextStatus: {
+	//		textStatus: "DM me to move!",
+	//	},
+	//});
 	// game.engine.sendAction({
 	// 	$case: "setOutfitString",
 	// 	setOutfitString: {
@@ -67,3 +109,6 @@ setTimeout(() => {
 	// 	},
 	// });
 }, 2000); // wait two seconds before setting these just to give the game a chance to init
+
+
+
