@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "checkJs": false,
+    "allowJs": true,
     "composite": true,
     "outDir": "dist",
     "sourceMap": true,
