@@ -221,29 +221,11 @@ Graph.prototype.neighbors = function (node) {
     return ret;
 };
 
-Graph.prototype.toString = function () {
-    var graphString = [];
-    var nodes = this.grid;
-    for (var x = 0; x < nodes.length; x++) {
-        var rowDebug = [];
-        var row = nodes[x];
-        for (var y = 0; y < row.length; y++) {
-            rowDebug.push(row[y].weight);
-        }
-        graphString.push(rowDebug.join(" "));
-    }
-    return graphString.join("\n");
-};
-
 function GridNode(x, y, weight) {
     this.x = x;
     this.y = y;
-    this.weight = weight;
+    this.weight = weight ? 1 : 0;
 }
-
-GridNode.prototype.toString = function () {
-    return "[" + this.x + " " + this.y + "]";
-};
 
 GridNode.prototype.getCost = function (fromNeighbor) {
     // Take diagonal weight into consideration.

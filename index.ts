@@ -3,90 +3,86 @@ import {Game, MoveDirection} from "@gathertown/gather-game-client";
 import {SpriteDirectionEnum_ENUM} from "@gathertown/gather-game-common";
 import astar, {Graph} from "./astartAlgo";
 
+const debounce = require('lodash.debounce');
+
 global.WebSocket = require("isomorphic-ws");
 
 const SPACE_ID = "xSfl6Admq5wHVIgS\\my-space";
 
 // types
 type Cord = {
-    x: number,
-    y: number,
+    col: number,
+    row: number,
 }
 
 // setup
-
 const game = new Game(() => Promise.resolve({apiKey: API_KEY}));
 game.connect(SPACE_ID); // replace with your spaceId of choice
 game.subscribeToConnection((connected) => console.log("connected?", connected));
 
 // shortest path
 const getShortestPath = (grid: any, botCords: Cord, targetCords: Cord, targetDirection: SpriteDirectionEnum_ENUM) => {
+    // set user as collision
+    grid[targetCords.row][targetCords.col] = true;
+
     let goalCords: Cord = {
-        x: targetCords.x,
-        y: targetCords.y,
+        col: targetCords.col,
+        row: targetCords.row,
     };
 
     // set target space behind target user
-    switch (targetDirection) {
-        case 1:
-            goalCords.y = goalCords.y - 1;
+    switch (true) {
+        case (targetDirection === 1 || targetDirection === 2): //down
+            if (goalCords.row !== 0) {
+                goalCords.row = goalCords.row - 1;
+            }
             break;
-        case 3:
-            goalCords.y = goalCords.y + 1;
+        case (targetDirection === 3 || targetDirection === 4): // up
+            if (goalCords.row !== (grid.length - 1)) {
+                goalCords.row = goalCords.row + 1;
+            }
             break;
-        case 5:
-            goalCords.x = goalCords.x + 1;
+        case (targetDirection === 5 || targetDirection === 6): // left
+            if (goalCords.col !== (grid[goalCords.row].length - 1)) {
+                goalCords.col = goalCords.col + 1;
+            }
             break;
-        case 7:
-            goalCords.x = goalCords.x - 1;
+        case (targetDirection === 7 || targetDirection === 8): // right
+            if (goalCords.col !== 0) {
+                goalCords.col = goalCords.col - 1;
+            }
             break;
         default:
             break;
     };
 
-    // transform the grid
-    for (let x = 0; x < grid.length; x++) {
-        for (let y = 0; y < grid[x].length; y++) {
-            grid[x][y] = grid[x][y] === false ? 0 : 1;
-        }
-    }
-
-    // set user as collision
-    grid[targetCords.x][targetCords.y] = 1;
-
     const graph = new Graph(grid, {diagonal: false});
 
-    //TODO: invert x and y in graph definition
-    const start = graph.grid[botCords.y][botCords.x];
-    const end = graph.grid[goalCords.y][goalCords.x];
+    const start = graph.grid[botCords.row][botCords.col];
+    const end = graph.grid[goalCords.row][goalCords.col];
 
-    const result = astar.search(graph, start, end);
+    const result = astar.search(graph, start, end, {closest: true});
 
-    let botLastX = botCords.x;
-    let botLastY = botCords.y;
+    let botLastCol = botCords.col;
+    let botLastRow = botCords.row;
 
-    console.log(goalCords);
-
-    const newArr = result.map((el) => ({x: el.y, y: el.x}));
-
-    newArr.forEach((node: any, index) => {
+    // move the bot
+    result.forEach((node: any, index) => {
         setTimeout(() => {
-            // no need to evaluate y since diagonal is not possible
-            if (node.x > botLastX) {
+            if (node.y > botLastCol) {
                 game.move(MoveDirection.Right);
-            } else if (node.x < botLastX) {
+            } else if (node.y < botLastCol) {
                 game.move(MoveDirection.Left);
             }
 
-            // no need to evaluate y since diagonal is not possible
-            if (node.y > botLastY) {
+            if (node.x > botLastRow) {
                 game.move(MoveDirection.Down);
-            } else if (node.y < botLastY) {
+            } else if (node.x < botLastRow) {
                 game.move(MoveDirection.Up);
             }
 
-            botLastX = node.x;
-            botLastY = node.y;
+            botLastCol = node.y;
+            botLastRow = node.x;
         }, 200 * index);
     });
 };
@@ -99,11 +95,28 @@ game.subscribeToEvent("playerChats", (data, _context) => {
             // do something
             switch (message.contents.toLowerCase()) {
                 case "hello":
-                    const target = game.getPlayer(message.senderId);
+                    let target = game.getPlayer(message.senderId);
+                    let bot = game.getPlayer('K0ZKgQN6tfMk9Kd5fqJPjtux6oR2'); // fixed bot id, TODO: add global variable
                     const map = game.partialMaps;
-                    const bot = game.getPlayer('K0ZKgQN6tfMk9Kd5fqJPjtux6oR2'); // fixed bot id, TODO: add global variable
 
-                    getShortestPath(map.room.collisions, {x: bot.x, y: bot.y}, {x: target.x, y: target.y}, target.direction);
+                    getShortestPath(map.room.collisions, {col: bot.x, row: bot.y}, {
+                        col: target.x,
+                        row: target.y
+                    }, target.direction);
+
+
+                    game.subscribeToEvent("playerMoves", debounce((data: any, context: any) => {
+                        if (context.playerId === message.senderId) {
+                            target = game.getPlayer(message.senderId);
+                            bot = game.getPlayer('K0ZKgQN6tfMk9Kd5fqJPjtux6oR2'); // fixed bot id, TODO: add global variable
+
+                            getShortestPath(map.room.collisions, {col: bot.x, row: bot.y}, {
+                                col: target.x,
+                                row: target.y
+                            }, target.direction);
+                        }
+                    }, 500));
+
                     break;
                 case "up":
                     game.move(MoveDirection.Up);
@@ -116,9 +129,6 @@ game.subscribeToEvent("playerChats", (data, _context) => {
                     break;
                 case "right":
                     game.move(MoveDirection.Right);
-                    break;
-                case "dance":
-                    game.move(MoveDirection.Dance);
                     break;
                 default:
                     let reply = "what? try sending up/down/left/right";
